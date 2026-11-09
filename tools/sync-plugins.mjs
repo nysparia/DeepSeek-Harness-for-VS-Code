@@ -11,7 +11,7 @@
 //
 // 说明:存在 tsconfig.json 的插件先用仓库根 node_modules 里的 tsc 编译(src -> lib),
 //       再把 lib/ + package.json + README.md 整体复制到 resources/<name>(先清后写,不留残留)。
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -55,7 +55,11 @@ for (const name of names) {
   rmSync(dst, { recursive: true, force: true });
   mkdirSync(dst, { recursive: true });
   if (existsSync(join(src, "lib"))) cpSync(join(src, "lib"), join(dst, "lib"), { recursive: true });
-  cpSync(pkgFile, join(dst, "package.json"));
+  // 发布清单剥掉 devDependencies:它只服务本地编译,npm 也从不给依赖装 dev 依赖,
+  // 留在 resources/ 的清单里只会误导读者。
+  const manifest = JSON.parse(readFileSync(pkgFile, "utf8"));
+  delete manifest.devDependencies;
+  writeFileSync(join(dst, "package.json"), JSON.stringify(manifest, null, 2) + "\n");
   if (existsSync(join(src, "README.md"))) cpSync(join(src, "README.md"), join(dst, "README.md"));
   // 0.2.1 起的插件显示元数据:图标与 locale/<lang>.json(插件管理页的图标 + 多语言标题/描述)。
   // 漏拷会让宿主回退到包名、并在清单声明了 icon 时给出元数据诊断错误,因此必须随包同步。
